@@ -13,15 +13,13 @@ class ChatMessage {
   final bool isUser;
   final String? actionProtocol;
   final List<String>? options;
-  final DateTime time;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     this.actionProtocol,
     this.options,
-    DateTime? time,
-  }) : time = time ?? DateTime.now();
+  });
 }
 
 class EmergencyChatScreen extends StatefulWidget {
@@ -31,15 +29,16 @@ class EmergencyChatScreen extends StatefulWidget {
   State<EmergencyChatScreen> createState() => _EmergencyChatScreenState();
 }
 
-class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTickerProviderStateMixin {
+class _EmergencyChatScreenState extends State<EmergencyChatScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
 
-  String _country = 'IN'; // 'IN' (112) or 'US' (911)
+  String _country = 'IN';
   String _selectedLang = 'en';
   String _sessionStage = 'INITIAL';
-  String? _emergencyType;
+  String? _emergencyCard;
   String _locationStatus = "Acquiring live GPS coordinates...";
   bool _isListening = false;
   bool _isThinking = false;
@@ -55,15 +54,6 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
     'ml': 'മലയാളം',
   };
 
-  final Map<String, String> _initialGreetings = {
-    'en': "Emergency assistance is available. Please tell me what happened. If someone is in immediate danger, contact your local emergency services now.",
-    'kn': "ತುರ್ತು ಸಹಾಯ ಲಭ್ಯವಿದೆ. ಏನಾಗಿದೆ ಎಂದು ತಿಳಿಸಿ. ಯಾರಾದರೂ ತೀವ್ರ ಅಪಾಯದಲ್ಲಿದ್ದರೆ, ತಕ್ಷಣ ತುರ್ತು ಸೇವೆಗೆ ಕರೆ ಮಾಡಿ.",
-    'hi': "आपातकालीन सहायता उपलब्ध है। कृपया बताएं क्या हुआ है। यदि कोई तत्काल खतरे में है, तो तुरंत आपातकालीन सेवाओं से संपर्क करें।",
-    'ta': "அவசர உதவி தயாராக உள்ளது. என்ன நடந்தது என்று சொல்லுங்கள். உயிருக்கு ஆபத்து என்றால் உடனடியாக அவசர எண்ணை அழைக்கவும்.",
-    'te': "అత్యవసర సహాయం అందుబాటులో ఉంది. ఏం జరిగిందో దయచేసి చెప్పండి. ఎవరైనా ప్రాణాపాయంలో ఉంటే వెంటనే అత్యవసర సేవలకు కాల్ చేయండి.",
-    'ml': "അടിയന്തിര സഹായം ലഭ്യമാണ്. എന്താണ് സംഭവിച്ചതെന്ന് ദയവായി പറയുക. ആരെങ്കിലും അപകടത്തിലാണെങ്കിൽ ഉടൻ വിളിക്കുക.",
-  };
-
   @override
   void initState() {
     super.initState();
@@ -73,20 +63,21 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
     )..repeat(reverse: true);
 
     _initLocation();
-    _addInitialBotGreeting();
+    _initDispatcherSession();
   }
 
-  void _addInitialBotGreeting() {
+  void _initDispatcherSession() {
     _messages.add(
       ChatMessage(
-        text: _initialGreetings[_selectedLang] ?? _initialGreetings['en']!,
+        text:
+            "🚨 EMERGENCY DISPATCH: Help is already being notified. Put phone on SPEAKERPHONE right now. Tell me exactly what happened, or tap an option below.",
         isUser: false,
         options: [
-          "🚨 Person Unconscious / Fell Down",
-          "🩸 Severe Spurting Bleeding",
+          "🫀 Collapsed / Gasping for Air",
+          "🩸 Severe Bleeding Wound",
+          "🏍️ Motorcycle Crash + Helmet",
           "🥪 Choking / Airway Blocked",
-          "🏍️ Motorcycle Crash on Road",
-          "🔥 Fire / Trapped in Smoke",
+          "⚡ Seizure / Active Shaking",
         ],
       ),
     );
@@ -104,11 +95,14 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
       );
       if (mounted) {
         setState(() {
-          _locationStatus = "GPS: ${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)} (Bengaluru)";
+          _locationStatus =
+              "GPS: ${pos.latitude.toStringAsFixed(4)}, ${pos.longitude.toStringAsFixed(4)} (Ready for 112)";
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _locationStatus = "Location: Bengaluru, Karnataka (Ready to share with 112)");
+      if (mounted) {
+        setState(() => _locationStatus = "GPS Location: Bengaluru (Sharing with 112)");
+      }
     }
   }
 
@@ -149,12 +143,13 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
       setState(() => _isListening = false);
       return;
     }
-
     setState(() => _isListening = true);
 
     if (kIsWeb) {
       String localeTag = "${_selectedLang}-IN";
-      if (_selectedLang == 'en') localeTag = (_country == 'IN') ? 'en-IN' : 'en-US';
+      if (_selectedLang == 'en') {
+        localeTag = (_country == 'IN') ? 'en-IN' : 'en-US';
+      }
 
       js.context.callMethod('eval', ["""
         window.speechResult = "";
@@ -165,12 +160,8 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
           rec.continuous = false;
           rec.interimResults = false;
           rec.start();
-          rec.onresult = function(e) {
-            window.speechResult = e.results[0][0].transcript;
-          };
-          rec.onerror = function(e) {
-            console.log('Voice recognition error', e);
-          };
+          rec.onresult = function(e) { window.speechResult = e.results[0][0].transcript; };
+          rec.onerror = function(e) { console.log('Speech error', e); };
         }
       """]);
 
@@ -199,7 +190,7 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
           "language": _selectedLang,
           "country": _country,
           "session_stage": _sessionStage,
-          "emergency_type": _emergencyType,
+          "emergency_card": _emergencyCard,
         }),
       );
 
@@ -208,14 +199,12 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
         final protocol = data["resolved_protocol"];
         final spoken = data["spoken_reassurance"] ?? "";
         final nextStage = data["next_stage"] ?? "INITIAL";
-        final eType = data["emergency_type"];
         final List<dynamic>? options = data["quick_options"];
         final detectedLang = data["language"] ?? _selectedLang;
 
         setState(() {
           _selectedLang = detectedLang;
           _sessionStage = nextStage;
-          if (eType != null) _emergencyType = eType;
           _isThinking = false;
 
           _messages.add(
@@ -238,10 +227,11 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
         _isThinking = false;
         _messages.add(
           ChatMessage(
-            text: "Connection note: Please ensure backend is running at http://127.0.0.1:8000. Calling emergency services is prioritized.",
+            text:
+                "Connection Note: Ensure backend is running at 127.0.0.1:8000. Calling 112 is prioritized.",
             isUser: false,
             actionProtocol: "CPR",
-            options: ["CALL EMERGENCY SERVICES"],
+            options: ["CALL 112 NOW"],
           ),
         );
       });
@@ -254,9 +244,7 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
       String encoded = Uri.encodeComponent(text);
       String url = "http://127.0.0.1:8000/api/tts?text=$encoded&lang=$lang";
       js.context.callMethod('eval', ["""
-        if (window.rapidAidAudio) {
-          window.rapidAidAudio.pause();
-        }
+        if (window.rapidAidAudio) window.rapidAidAudio.pause();
         window.rapidAidAudio = new Audio('$url');
         window.rapidAidAudio.play().catch(function(e){ console.log(e); });
       """]);
@@ -264,6 +252,16 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
   }
 
   void _launchVisualProtocol(String protocolKey) {
+    // Silence chat audio before switching screens
+    if (kIsWeb) {
+      js.context.callMethod('eval', ["""
+        if (window.rapidAidAudio) {
+          window.rapidAidAudio.pause();
+          window.rapidAidAudio.currentTime = 0;
+        }
+      """]);
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -278,6 +276,8 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
   @override
   void dispose() {
     _micPulseController.dispose();
+    _textController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -293,70 +293,57 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
         title: Row(
           children: [
             const CircleAvatar(
-              radius: 17,
+              radius: 16,
               backgroundColor: Colors.white,
-              child: Icon(Icons.health_and_safety, color: Color(0xFF991B1B), size: 22),
+              child: Icon(Icons.emergency, color: Color(0xFF991B1B), size: 20),
             ),
             const SizedBox(width: 8),
             Text(
-              "RapidAid ($_country $dialNumber)",
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+              "RapidAid EMD ($dialNumber)",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
         actions: [
-          // Country Switcher
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+          DropdownButton<String>(
+            value: _country,
+            dropdownColor: const Color(0xFF7F1D1D),
+            underline: const SizedBox(),
+            icon: const Icon(Icons.flag, color: Colors.white, size: 16),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
             ),
-            child: DropdownButton<String>(
-              value: _country,
-              dropdownColor: const Color(0xFF7F1D1D),
-              underline: const SizedBox(),
-              icon: const Icon(Icons.flag, color: Colors.white, size: 16),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-              items: const [
-                DropdownMenuItem(value: 'IN', child: Text("🇮🇳 India 112")),
-                DropdownMenuItem(value: 'US', child: Text("🇺🇸 USA 911")),
-              ],
-              onChanged: (val) {
-                if (val != null) setState(() => _country = val);
-              },
-            ),
+            items: const [
+              DropdownMenuItem(value: 'IN', child: Text("🇮🇳 112")),
+              DropdownMenuItem(value: 'US', child: Text("🇺🇸 911")),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _country = val);
+            },
           ),
           const SizedBox(width: 6),
-          // Language Switcher
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
+          DropdownButton<String>(
+            value: _selectedLang,
+            dropdownColor: const Color(0xFF7F1D1D),
+            underline: const SizedBox(),
+            icon: const Icon(Icons.language, color: Colors.white, size: 16),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
             ),
-            child: DropdownButton<String>(
-              value: _selectedLang,
-              dropdownColor: const Color(0xFF7F1D1D),
-              underline: const SizedBox(),
-              icon: const Icon(Icons.language, color: Colors.white, size: 16),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-              items: _languages.entries.map((e) {
-                return DropdownMenuItem(value: e.key, child: Text(e.value));
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _selectedLang = val);
-                  _messages.add(ChatMessage(
-                    text: _initialGreetings[val] ?? _initialGreetings['en']!,
-                    isUser: false,
-                  ));
-                  _scrollToBottom();
-                }
-              },
-            ),
+            items: _languages.entries.map((e) {
+              return DropdownMenuItem(value: e.key, child: Text(e.value));
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedLang = val);
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -369,7 +356,11 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
             Expanded(
               child: Text(
                 _locationStatus,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
             ),
             ElevatedButton.icon(
@@ -388,52 +379,55 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
       ),
       body: Column(
         children: [
-          // ACCESSIBILITY & INSTANT AUDIO BAR
+          // DISPATCHER SPEAKER & SCENE BAR
           Container(
-            color: const Color(0xFF1E293B),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: const Color(0xFF0F172A),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                const Row(
+                  children: [
+                    Icon(Icons.volume_up, color: Colors.amber, size: 18),
+                    SizedBox(width: 6),
+                    Text(
+                      "SPEAKERPHONE ON • FREE BOTH HANDS",
+                      style: TextStyle(
+                        color: Colors.amber,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
                 GestureDetector(
                   onTap: () => setState(() => _isDeafMode = !_isDeafMode),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: _isDeafMode ? Colors.blue.shade700 : Colors.white10,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white24),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isDeafMode ? Icons.hearing_disabled : Icons.hearing,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _isDeafMode ? "DEAF TACTILE MODE: ON" : "ENABLE DEAF MODE",
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
-                      ],
+                    child: Text(
+                      _isDeafMode ? "DEAF VIBRATE: ON" : "DEAF MODE",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
-                ),
-                const Text(
-                  "Deterministic Safety Engine",
-                  style: TextStyle(color: Colors.white54, fontSize: 11, fontStyle: FontStyle.italic),
                 ),
               ],
             ),
           ),
 
-          // EMERGENCY VOICE DISPATCH BAR
+          // PUSH TO SPEAK DISPATCH BAR
           GestureDetector(
             onTap: _toggleMic,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 10),
               color: _isListening ? Colors.red.shade700 : const Color(0xFF1E3A8A),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -443,13 +437,19 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
                     child: Icon(
                       _isListening ? Icons.mic : Icons.mic_none,
                       color: Colors.white,
-                      size: 26,
+                      size: 24,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Text(
-                    _isListening ? "LISTENING TO YOU... SPEAK NOW" : "TAP HERE TO SPEAK EMERGENCY DIRECTLY",
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
+                    _isListening
+                        ? "DISPATCHER LISTENING... SPEAK NOW"
+                        : "TAP TO SPEAK DIRECTLY TO DISPATCHER",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -464,7 +464,102 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
-                return _buildChatBubble(msg);
+                final isMe = msg.isUser;
+                return Align(
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.88,
+                    ),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isMe ? const Color(0xFF1E3A8A) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: isMe ? null : Border.all(color: Colors.grey.shade300),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          msg.text,
+                          style: TextStyle(
+                            fontSize: _isDeafMode ? 16 : 14,
+                            height: 1.4,
+                            color: isMe ? Colors.white : Colors.black87,
+                            fontWeight: isMe ? FontWeight.w500 : FontWeight.w700,
+                          ),
+                        ),
+                        // LARGE TACTILE ACTION BUTTONS
+                        if (msg.options != null && msg.options!.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: msg.options!.map((opt) {
+                              return ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFEF2F2),
+                                  foregroundColor: const Color(0xFF991B1B),
+                                  elevation: 0,
+                                  side: BorderSide(color: Colors.red.shade300, width: 1.5),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  minimumSize: const Size(80, 48),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: () => _handleUserResponse(opt),
+                                child: Text(
+                                  opt,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                        // DYNAMIC ACTION BUTTON: ADAPTS TO PROTOCOL
+                        if (msg.actionProtocol != null) ...[
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF991B1B),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            icon: const Icon(Icons.play_circle_fill, size: 22),
+                            label: Text(
+                              msg.actionProtocol == "CPR"
+                                  ? "OPEN CPR COACHING & 110 BPM METRONOME"
+                                  : "OPEN ${msg.actionProtocol} FIRST-AID COACHING",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                            onPressed: () => _launchVisualProtocol(msg.actionProtocol!),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
               },
             ),
           ),
@@ -477,12 +572,19 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
                   const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF991B1B)),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF991B1B),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "Selecting clinical triage questions...",
-                    style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey.shade700),
+                    "Dispatcher verifying protocol...",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
                 ],
               ),
@@ -491,10 +593,7 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
           // INPUT ROW
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, -1))],
-            ),
+            color: Colors.white,
             child: SafeArea(
               child: Row(
                 children: [
@@ -502,11 +601,14 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
                     child: TextField(
                       controller: _textController,
                       decoration: InputDecoration(
-                        hintText: "Type what is happening or tap options above...",
+                        hintText: "Type what is happening or tap buttons above...",
                         hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                         filled: true,
                         fillColor: const Color(0xFFF1F5F9),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -525,88 +627,6 @@ class _EmergencyChatScreenState extends State<EmergencyChatScreen> with SingleTi
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildChatBubble(ChatMessage msg) {
-    final isMe = msg.isUser;
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.88),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isMe ? const Color(0xFF1E3A8A) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: isMe ? null : Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              msg.text,
-              style: TextStyle(
-                fontSize: _isDeafMode ? 16 : 14,
-                height: 1.4,
-                color: isMe ? Colors.white : Colors.black87,
-                fontWeight: isMe ? FontWeight.w500 : FontWeight.w700,
-              ),
-            ),
-            // TACTILE 3-STATE QUICK BUTTONS
-            if (msg.options != null && msg.options!.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: msg.options!.map((opt) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFEF2F2),
-                      foregroundColor: const Color(0xFF991B1B),
-                      elevation: 0,
-                      side: BorderSide(color: Colors.red.shade300, width: 1.5),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      minimumSize: const Size(80, 48), // Large touch targets for stressful conditions
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => _handleUserResponse(opt),
-                    child: Text(
-                      opt,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-            // VISUAL PROTOCOL ACTION BUTTON
-            if (msg.actionProtocol != null) ...[
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF991B1B),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.play_circle_fill, size: 24),
-                label: Text(
-                  "OPEN ${msg.actionProtocol} VISUAL & VOICE GUIDE",
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                ),
-                onPressed: () => _launchVisualProtocol(msg.actionProtocol!),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }
